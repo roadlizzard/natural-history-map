@@ -3,6 +3,7 @@ node_modules/
 .wrangler/
 __pycache__/
 cache/
-data/
+data/*
 .DS_Store
 *.lock
+!data/slices.json

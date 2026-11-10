@@ -1,0 +1,106 @@
+[
+ {
+  "time": 510,
+  "intervals": "Stage 4,Wuliuan",
+  "label": "Middle Cambrian",
+  "period": "Cambrian",
+  "ready": true,
+  "map": true
+ },
+ {
+  "time": 450,
+  "intervals": "Sandbian,Katian",
+  "label": "Late Ordovician",
+  "period": "Ordovician",
+  "ready": true,
+  "map": true
+ },
+ {
+  "time": 430,
+  "intervals": "Wenlock",
+  "label": "Middle Silurian",
+  "period": "Silurian",
+  "ready": true,
+  "map": true
+ },
+ {
+  "time": 380,
+  "intervals": "Frasnian",
+  "label": "Late Devonian",
+  "period": "Devonian",
+  "ready": true,
+  "map": true
+ },
+ {
+  "time": 310,
+  "intervals": "Moscovian,Kasimovian",
+  "label": "Late Carboniferous",
+  "period": "Carboniferous",
+  "ready": true,
+  "map": true
+ },
+ {
+  "time": 290,
+  "intervals": "Sakmarian,Artinskian",
+  "label": "Early Permian",
+  "period": "Permian",
+  "ready": true,
+  "map": true
+ },
+ {
+  "time": 230,
+  "intervals": "Carnian",
+  "label": "Late Triassic",
+  "period": "Triassic",
+  "ready": true,
+  "map": true
+ },
+ {
+  "time": 150,
+  "intervals": "Kimmeridgian,Tithonian",
+  "label": "Late Jurassic",
+  "period": "Jurassic",
+  "ready": true,
+  "map": true
+ },
+ {
+  "time": 120,
+  "intervals": "Barremian,Aptian",
+  "label": "Early Cretaceous",
+  "period": "Cretaceous",
+  "ready": true,
+  "map": true
+ },
+ {
+  "time": 70,
+  "intervals": "Maastrichtian",
+  "label": "Late Cretaceous",
+  "period": "Cretaceous",
+  "ready": true,
+  "map": true
+ },
+ {
+  "time": 50,
+  "intervals": "Ypresian,Lutetian",
+  "label": "Early Eocene",
+  "period": "Paleogene",
+  "ready": true,
+  "map": true
+ },
+ {
+  "time": 15,
+  "intervals": "Langhian,Serravallian",
+  "label": "Middle Miocene",
+  "period": "Neogene",
+  "ready": true,
+  "map": true
+ },
+ {
+  "time": 0,
+  "intervals": "Pleistocene",
+  "label": "Ice Age (Pleistocene)",
+  "period": "Quaternary",
+  "ready": true,
+  "map": true
+ }
+]
