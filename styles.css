@@ -1,0 +1,822 @@
+/* Natural History Map. Colours are tokens with light and dark values. */
+:root {
+  color-scheme: light;
+  --paper: #fbfaf5;
+  --ink: #141413;
+  --ink-2: #45443f;
+  --muted: #6e6c66;
+  --hairline: #dedcd3;
+  --panel-bg: rgba(251, 250, 245, 0.94);
+  --accent: #1d4f91;
+  --fam-invert: #6250d6;
+  --fam-vert: #e0592a;
+  --fam-plant: #13996a;
+  --fam-other: #8f8d86;
+  --coast-ink: rgba(255, 255, 255, 0.55);
+  --line-ink: #161616;
+  --line-halo: rgba(255, 255, 255, 0.95);
+  --ring: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --paper: #141413;
+    --ink: #efeee9;
+    --ink-2: #c9c7bd;
+    --muted: #a3a197;
+    --hairline: #34332f;
+    --panel-bg: rgba(24, 24, 22, 0.95);
+    --accent: #8db7f0;
+    --fam-invert: #9085e9;
+    --fam-vert: #e8703f;
+    --fam-plant: #2fb383;
+    --fam-other: #8a8880;
+    --coast-ink: rgba(255, 255, 255, 0.5);
+    --line-ink: #fbfaf5;
+    --line-halo: rgba(0, 0, 0, 0.8);
+    --ring: #f2f1ec;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #141413; --ink: #efeee9; --ink-2: #c9c7bd; --muted: #a3a197; --hairline: #34332f;
+  --panel-bg: rgba(24, 24, 22, 0.95); --accent: #8db7f0;
+  --fam-invert: #9085e9; --fam-vert: #e8703f; --fam-plant: #2fb383; --fam-other: #8a8880;
+  --coast-ink: rgba(255, 255, 255, 0.5); --line-ink: #fbfaf5; --line-halo: rgba(0, 0, 0, 0.8); --ring: #f2f1ec;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--paper); color: var(--ink);
+  font: 16px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+.serif { font-family: "EB Garamond", Palatino, Georgia, serif; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+button { font: inherit; color: inherit; }
+
+/* Top bar: title, period, search */
+.topbar { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 18px; padding: 14px 20px 10px; }
+.topbar h1 { margin: 0; font: 400 1.6rem/1.2 "EB Garamond", Palatino, Georgia, serif; }
+.topbar .period { margin: 0; color: var(--ink-2); }
+.search { margin-left: auto; }
+.search input {
+  width: min(320px, 70vw); padding: 8px 12px; border-radius: 999px; border: 1px solid var(--hairline);
+  background: var(--paper); color: var(--ink); font: inherit; font-size: 15px;
+}
+
+/* Stage: map with the panel on the right */
+.stage { position: relative; height: min(82vh, 860px); min-height: 480px; border-block: 1px solid var(--hairline); overflow: hidden; }
+#map { position: absolute; inset: 0; background: var(--paper); }
+.maplibregl-ctrl-attrib { font-size: 11px; }
+
+.crumbs {
+  position: absolute; top: 12px; left: 12px; right: 440px; z-index: 5;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
+}
+.crumbs button, .crumbs span {
+  padding: 6px 12px; border-radius: 999px; border: 1px solid var(--hairline); background: var(--panel-bg);
+  font-size: 14px; line-height: 1.2;
+}
+.crumbs button { cursor: pointer; }
+.crumbs button:hover { border-color: var(--ink-2); }
+.crumbs span[aria-current] { font-weight: 600; }
+.crumbs .sep { border: none; background: none; padding: 0 2px; color: var(--muted); }
+
+.hint {
+  position: absolute; left: calc((100% - 420px) / 2); bottom: 16px; transform: translateX(-50%); z-index: 5; margin: 0;
+  padding: 7px 14px; border-radius: 999px; background: var(--ink); color: var(--paper); font-size: 14px; white-space: nowrap;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+}
+
+.tooltip {
+  position: absolute; z-index: 6; pointer-events: none; display: none; max-width: 260px;
+  padding: 6px 10px; border-radius: 8px; background: var(--panel-bg); border: 1px solid var(--hairline);
+  font-size: 13px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Panel */
+.panel {
+  position: absolute; top: 12px; right: 12px; bottom: 12px; width: 408px; z-index: 6; overflow-y: auto;
+  padding: 18px 20px 22px; border-radius: 14px; background: var(--panel-bg); border: 1px solid var(--hairline);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.14);
+  outline: none;
+}
+.panel .kicker { margin: 0 0 2px; font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.panel h2 { margin: 0 0 6px; font: 400 1.75rem/1.15 "EB Garamond", Palatino, Georgia, serif; }
+.panel h2:focus { outline: none; }
+.panel h3 { margin: 20px 0 8px; font-size: 14px; font-weight: 600; }
+.panel p { margin: 0 0 10px; }
+.panel .lede { font: 1.15rem/1.45 "EB Garamond", Palatino, Georgia, serif; }
+.panel .stats { color: var(--ink-2); font-size: 14px; }
+.panel .small { font-size: 12px; color: var(--muted); }
+.panel .small a { color: var(--muted); }
+
+/* Share bar: what lived, by group */
+.share { display: flex; height: 12px; border-radius: 6px; overflow: hidden; gap: 2px; margin: 4px 0 10px; }
+.share span { display: block; min-width: 2px; }
+
+/* Lists of things you can open */
+.choices { list-style: none; margin: 0; padding: 0; }
+.choice {
+  width: 100%; display: grid; grid-template-columns: 32px 1fr auto; align-items: center; gap: 10px;
+  padding: 8px 6px; border: none; border-bottom: 1px solid var(--hairline); background: none; cursor: pointer; text-align: left;
+  border-radius: 6px;
+}
+.choice:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.choice[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.choice .n { font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.choice .name i { font-family: "EB Garamond", Palatino, Georgia, serif; font-size: 1.1rem; }
+.choice .sub { display: block; font-size: 12px; color: var(--muted); }
+.more { margin-top: 8px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--hairline); background: none; cursor: pointer; font-size: 13px; }
+
+/* Group silhouettes */
+.icon {
+  display: inline-block; width: 26px; height: 22px; flex: none;
+  background-color: var(--icon-color, var(--ink));
+  -webkit-mask: var(--icon) center / contain no-repeat; mask: var(--icon) center / contain no-repeat;
+}
+.dot { display: inline-block; width: 14px; height: 14px; border-radius: 50%; background: var(--icon-color); margin: 4px 6px; }
+
+/* Fossil card */
+.photo { margin: -4px -4px 12px; }
+.photo img { display: block; width: 100%; max-height: 240px; object-fit: cover; border-radius: 10px; background: var(--hairline); }
+.photo figcaption { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.traits { list-style: none; margin: 8px 0 12px; padding: 0; }
+.traits li { display: grid; grid-template-columns: 30px 1fr; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--hairline); }
+.traits svg { width: 22px; height: 22px; stroke: var(--ink-2); fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.traits b { display: block; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.panel details { margin: 6px 0 14px; }
+.panel summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
+.panel details p { font: 1.05rem/1.5 "EB Garamond", Palatino, Georgia, serif; }
+.panel details h4 { margin: 12px 0 4px; font-size: 13px; }
+.panel .act { padding: 7px 14px; border-radius: 999px; border: 1px solid var(--hairline); background: none; cursor: pointer; font-size: 14px; }
+
+/* Example fossils on the map: a plain dot in the group's colour, named beside it (real buttons). */
+.example { display: flex; align-items: center; gap: 5px; border: none; padding: 0; background: none; cursor: pointer; }
+.example .disc { width: 14px; height: 14px; flex: none; border-radius: 50%; background: var(--icon-color); box-shadow: 0 0 0 1.5px #fff, 0 1px 3px rgba(0,0,0,0.5); }
+.example .label {
+  font: 14px/1.2 "EB Garamond", Palatino, Georgia, serif; color: #fff; white-space: nowrap;
+  text-shadow: 0 0 3px rgba(0,0,0,0.9), 0 0 2px rgba(0,0,0,0.9), 0 1px 2px rgba(0,0,0,0.8);
+}
+.example:hover .label, .example:focus-visible .label { text-decoration: underline; }
+
+/* Cards for fossils: placed beside their fossil without covering each other; stay until closed. */
+.card-lines { position: absolute; left: 0; top: 0; z-index: 4; pointer-events: none; }
+.card-lines line { stroke: #fff; stroke-width: 1; opacity: 0.8; }
+.card-layer { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
+.fossil-card {
+  position: absolute; left: 0; top: 0; width: 280px; max-height: calc(100% - 60px); overflow-y: auto; pointer-events: auto;
+  padding: 0 0 10px; border-radius: 12px; background: var(--paper); color: var(--ink);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.32); font-size: 13px; line-height: 1.4;
+}
+.fossil-card .card-x {
+  position: absolute; right: 6px; top: 6px; width: 26px; height: 26px; border-radius: 50%; border: none;
+  background: rgba(0,0,0,0.55); color: #fff; font-size: 17px; line-height: 1; cursor: pointer;
+}
+.fossil-card img { display: block; width: 100%; height: 108px; object-fit: cover; background: var(--hairline); }
+.fossil-card .no-photo { display: flex; align-items: center; gap: 10px; padding: 18px 40px 6px 14px; color: var(--muted); }
+.fossil-card .no-photo .icon { width: 44px; height: 36px; }
+.fossil-card h4 { margin: 8px 14px 2px; font: 400 1.25rem/1.15 "EB Garamond", Palatino, Georgia, serif; }
+.fossil-card p { margin: 4px 14px; }
+.fossil-card .habit { font-size: 12.5px; }
+.fossil-card .range-note { font-size: 12px; color: var(--ink-2); border-top: 1px solid var(--hairline); padding-top: 6px; margin-top: 8px; }
+.fossil-card .range-note:empty { display: none; }
+.fossil-card .what { color: var(--ink-2); }
+.fossil-card .facts { font-size: 12px; color: var(--ink-2); }
+.fossil-card .credit { font-size: 11px; color: var(--muted); margin-top: 8px; }
+.fossil-card .credit a { color: var(--muted); }
+
+.panel .groups { list-style: none; margin: 0; padding: 0; font-size: 14px; }
+.panel .groups li { display: grid; grid-template-columns: 30px 1fr auto; align-items: center; gap: 8px; padding: 4px 0; }
+.panel .groups .n { font-size: 12px; color: var(--muted); }
+
+/* Key bar under the map */
+.keybar { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; padding: 10px 20px; }
+.key { display: flex; flex-wrap: wrap; gap: 6px 18px; list-style: none; margin: 0; padding: 0; font-size: 14px; }
+.key li { display: flex; align-items: center; gap: 6px; }
+.key .sw { width: 13px; height: 13px; border-radius: 50%; background: var(--c); }
+.keybar-btn { margin-left: auto; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--hairline); background: none; cursor: pointer; font-size: 13px; }
+.terrain-key {
+  position: absolute; right: 20px; bottom: 44px; z-index: 7; list-style: none; margin: 0; padding: 10px 14px;
+  background: var(--panel-bg); border: 1px solid var(--hairline); border-radius: 10px; font-size: 13px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.16);
+}
+.terrain-key li { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
+.terrain-key .sw { width: 22px; height: 12px; border-radius: 3px; background: var(--c); }
+.terrain-key .coast { width: 22px; border-top: 2px dotted var(--ink-2); }
+
+.sources { padding: 6px 20px 30px; font-size: 12px; color: var(--muted); max-width: 1100px; }
+.sources a { color: var(--ink-2); }
+
+@media (max-width: 760px) {
+  .topbar { padding: 10px 14px 8px; }
+  .search { margin-left: 0; width: 100%; }
+  .search input { width: 100%; }
+  .stage { height: auto; min-height: 0; display: flex; flex-direction: column; overflow: visible; }
+  #map { position: relative; height: 56vh; }
+  .crumbs { right: 12px; }
+  .hint { left: 12px; right: 12px; bottom: auto; top: 54px; transform: none; white-space: normal; text-align: center; font-size: 13px; }
+  .panel { position: relative; inset: auto; width: auto; max-height: none; margin: 10px; border-radius: 12px; }
+  .keybar, .sources { padding-inline: 14px; }
+}
+
+/* Names of the ancient lands and seas, written on the globe */
+.place-name { pointer-events: none; white-space: nowrap; font-family: "EB Garamond", Palatino, Georgia, serif; text-align: center;
+  text-shadow: 0 0 4px rgba(0,0,0,0.85), 0 0 2px rgba(0,0,0,0.9); }
+.place-name.super { font-size: 19px; letter-spacing: 0.32em; text-transform: uppercase; color: rgba(255,255,255,0.78); }
+.place-name.land { font-size: 14px; letter-spacing: 0.06em; color: rgba(255,255,255,0.88); }
+.place-name.sea { font-size: 16px; font-style: italic; letter-spacing: 0.12em; color: rgba(190,225,255,0.92); }
+/* Today's places, where they sat then: small gold capitals, so they read as a different layer */
+.place-name.modern { font: 600 10px/1 system-ui, sans-serif; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(246,214,150,0.95); }
+/* The terrain itself: mountain belts and shallow seas */
+.place-name.terrain { font-size: 12px; font-style: italic; color: rgba(235,235,225,0.78); }
+
+/* An animal in the panel */
+.panel .life-pic { margin: -18px -20px 12px; }
+.panel .life-pic img { display: block; width: 100%; max-height: 300px; object-fit: cover; }
+.panel .life-pic figcaption { font-size: 11px; color: var(--muted); padding: 5px 20px 0; }
+.panel .life-pic .tag { display: inline-block; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); margin-right: 6px; }
+.panel .back { border: none; background: none; padding: 0; margin: 0 0 8px; color: var(--ink-2); cursor: pointer; font-size: 14px; }
+.panel .back:hover { text-decoration: underline; }
+.panel .facts-list { list-style: none; padding: 0; margin: 10px 0; }
+.panel .facts-list li { padding: 6px 0; border-bottom: 1px solid var(--hairline); font-size: 14px; }
+.panel .facts-list b { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.panel .range-note { font-size: 13px; color: var(--ink-2); background: color-mix(in srgb, var(--ink) 5%, transparent); padding: 10px 12px; border-radius: 8px; }
+.panel .range-note:empty { display: none; }
+.names-hidden .place-name.super, .names-hidden .place-name.land, .names-hidden .place-name.sea { display: none; }
+
+/* The flat world map shown while an animal is open: covers the map area, beside the panel */
+.flatmap { position: absolute; left: 0; top: 0; bottom: 0; right: 432px; width: calc(100% - 432px); height: 100%; z-index: 4; background: #0d1622; }
+.flatmap[hidden] { display: none; }
+@media (max-width: 760px) {
+  .flatmap { right: 0; width: 100%; height: 56vh; }
+}
+
+/* ---- Full-screen map: only the card on the right and the legend sit on top of it ---- */
+html, body { height: 100%; overflow: hidden; }
+.stage { height: 100vh; min-height: 0; border: none; }
+.panel { top: 12px; bottom: 12px; padding: 0; display: flex; flex-direction: column; overflow: hidden; }
+.panel-head { padding: 16px 20px 12px; border-bottom: 1px solid var(--hairline); }
+.panel-head h1 { margin: 0; font: 400 1.45rem/1.15 "EB Garamond", Palatino, Georgia, serif; }
+.panel-head .period { margin: 2px 0 10px; font-size: 13px; color: var(--ink-2); }
+.panel-head .search { display: block; margin: 0; }
+.panel-head .search input { width: 100%; }
+#panel { flex: 1; overflow-y: auto; padding: 16px 20px 18px; outline: none; }
+.panel .sources { border-top: 1px solid var(--hairline); padding: 8px 20px; font-size: 12px; color: var(--muted); max-height: 40%; overflow-y: auto; }
+.panel .sources summary { cursor: pointer; }
+.panel .sources a { color: var(--ink-2); }
+
+.legend {
+  position: absolute; top: 12px; left: 12px; z-index: 5; max-width: 330px;
+  padding: 8px 12px; border-radius: 10px; background: var(--panel-bg); border: 1px solid var(--hairline);
+  font-size: 13px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+}
+.legend .key { display: flex; flex-wrap: wrap; gap: 4px 14px; list-style: none; margin: 0; padding: 0; }
+.legend .key li { display: flex; align-items: center; gap: 6px; }
+.legend .key .sw { width: 11px; height: 11px; border-radius: 50%; background: var(--c); }
+.legend .range-key { display: none; list-style: none; margin: 8px 0 0; padding: 8px 0 0; border-top: 1px solid var(--hairline); }
+.flat-open .legend .range-key { display: block; }
+.flat-open .legend .key { display: none; }
+.legend .range-key li { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
+.legend .range-key .sw { width: 18px; height: 11px; border-radius: 3px; background: var(--fam-vert); border: 1.5px solid #fff; }
+.legend .range-key .sw.faint { opacity: 0.4; border-color: transparent; }
+.legend .range-key .ln { display: inline-block; width: 20px; border-top: 2px solid var(--ink); }
+.legend .range-key .ln.dash { border-top-style: dashed; }
+.legend .range-key .dot-find { width: 8px; height: 8px; border-radius: 50%; background: #fff; border: 1.5px solid #111; }
+.legend-btn { margin-top: 6px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--hairline); background: none; cursor: pointer; font-size: 12px; }
+.legend .terrain-key { position: static; margin: 6px 0 0; padding: 0; box-shadow: none; border: none; background: none; }
+
+.flatmap { right: 0; width: 100%; background: #0d2a4f; }
+
+@media (max-width: 760px) {
+  html, body { overflow: auto; }
+  .stage { height: auto; }
+  .panel { position: relative; inset: auto; width: auto; margin: 10px; display: block; }
+  #panel { overflow: visible; }
+  .legend { max-width: calc(100% - 24px); }
+  .flatmap { right: 0; width: 100%; }
+}
+
+/* Way back from an animal to the place's fossils: on the flat map and in the card */
+.flat-back {
+  position: absolute; left: 12px; top: 150px; z-index: 6; padding: 8px 14px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--hairline); background: var(--panel-bg); color: var(--ink); font-size: 14px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+.flat-back[hidden] { display: none; }
+.flat-back:hover { border-color: var(--ink-2); }
+.panel .back-btn {
+  display: block; width: 100%; margin: 0 0 12px; padding: 8px 12px; border-radius: 8px; cursor: pointer; text-align: left;
+  border: 1px solid var(--hairline); background: color-mix(in srgb, var(--ink) 5%, transparent); color: var(--ink); font-size: 14px;
+}
+.panel .back-btn:hover { border-color: var(--ink-2); }
+
+/* Back arrow in the card's top-left corner */
+.panel-head { position: relative; }
+/* Back arrow: its own small row at the top of the card's content, below the logo */
+.corner-back {
+  flex: none; margin: 10px 0 0 16px; width: 32px; height: 32px; border-radius: 50%; cursor: pointer;
+  border: 1px solid var(--hairline); background: color-mix(in srgb, var(--ink) 6%, transparent); color: var(--ink);
+  font-size: 17px; line-height: 1; display: flex; align-items: center; justify-content: center;
+}
+.corner-back:hover { border-color: var(--ink-2); }
+.corner-back[hidden] { display: none; }
+
+/* ---------- Time slider and guided tours ---------- */
+.timeline { margin: 0.4rem 0 0.6rem; }
+.timeline input[type="range"] { width: 100%; accent-color: var(--accent, #c9a227); }
+.timeline .ticks { display: flex; justify-content: space-between; font-size: 0.72rem; font-variant-numeric: tabular-nums; }
+.timeline .ticks button { font: inherit; color: inherit; background: none; border: 0; padding: 2px 1px; cursor: pointer; opacity: 0.75; }
+.timeline .ticks button:hover { opacity: 1; text-decoration: underline; }
+.timeline .ticks .on { opacity: 1; font-weight: 600; text-decoration: underline; }
+.timeline .small { margin: 0.2rem 0 0; }
+.tour-box { border: 1px solid currentColor; border-radius: 6px; padding: 0.6rem 0.8rem; margin: 0.8rem 0; }
+.tour-box p { margin: 0.3rem 0; }
+.tour-nav { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.4rem; }
+.tour-nav button { font: inherit; padding: 0.3rem 0.7rem; border: 1px solid currentColor; border-radius: 4px; background: none; color: inherit; cursor: pointer; }
+
+/* Space behind the globe */
+#map { background: #03040b var(--stars) repeat; background-size: 512px 512px; }
+.names-key { margin: 6px 0 2px; font-size: 11px; opacity: 0.85; }
+.names-key .nk-modern { font: 600 9px system-ui, sans-serif; letter-spacing: 0.1em; color: rgb(196,150,60); }
+@media (prefers-color-scheme: dark) { .names-key .nk-modern { color: rgba(246,214,150,0.95); } }
+
+/* The logo in place of the title, on black */
+.panel-head { background: #000; }
+.panel-head h1.logo { margin: 0; line-height: 0; }
+.panel-head h1.logo img { display: block; width: 100%; height: auto; }
+.panel-head { overflow: visible; }
+.panel p.brief b { font-weight: 600; }
+
+/* Time travel between periods */
+.time-travel .place-name, .time-travel .example { opacity: 0 !important; transition: opacity 0.4s; }
+.time-clock { position: absolute; left: 50%; top: 24px; transform: translateX(calc(-50% - 216px)); z-index: 6; pointer-events: none;
+  text-align: center; color: #fff; text-shadow: 0 0 8px rgba(0,0,0,0.9); font-family: "EB Garamond", Georgia, serif; }
+.time-clock b { display: block; font-size: 56px; font-weight: 400; line-height: 1; font-variant-numeric: tabular-nums; }
+.time-clock span { font-size: 15px; letter-spacing: 0.08em; }
+@media (max-width: 760px) { .time-clock { transform: translateX(-50%); bottom: auto; top: 30vh; } }
+.time-canvas { position: absolute; left: 0; top: 0; bottom: 0; right: 432px; width: calc(100% - 432px); height: 100%; z-index: 5; }
+@media (max-width: 760px) { .time-canvas { right: 0; width: 100%; height: 56vh; } }
+.time-travel .legend { opacity: 0; transition: opacity 0.3s; }
+.time-travel .maplibregl-ctrl { visibility: hidden; }
+.next-period { display: block; width: 100%; margin-top: 8px; padding: 9px 12px; font: 600 14px/1.2 system-ui, sans-serif;
+  color: #0b0b0b; background: #5dff3a; border: 0; border-radius: 8px; cursor: pointer; text-align: center; }
+.next-period:hover { background: #8dff6a; }
+
+/* Flat world map popped out in the card during time travel */
+.time-inset { position: absolute; right: 12px; bottom: 12px; width: min(62vw, 980px); margin: 0; z-index: 7; background: #0b0b0b;
+  border: 1px solid var(--hairline); border-radius: 12px; padding: 10px; box-shadow: 0 10px 40px rgba(0,0,0,0.6); }
+.time-inset canvas { display: block; width: 100%; height: auto; aspect-ratio: 2 / 1; border-radius: 6px; }
+.time-inset figcaption { margin-top: 6px; font-size: 11px; color: var(--ink-2); }
+@media (max-width: 760px) { .time-inset { left: 8px; right: 8px; width: auto; bottom: auto; top: calc(56vh - 20px); } }
+.time-inset .time-clock { position: static; transform: none; display: flex; align-items: baseline; gap: 10px; text-align: left; margin: 0 2px 8px; }
+.time-inset .time-clock b { display: inline; font-size: 34px; }
+.time-inset .time-clock span { font-size: 14px; }
+
+/* Names on the globe during time travel (the normal names are hidden then) */
+.travel-name { pointer-events: none; white-space: nowrap; font-family: "EB Garamond", Palatino, Georgia, serif;
+  text-shadow: 0 0 4px rgba(0,0,0,0.85), 0 0 2px rgba(0,0,0,0.9); }
+.travel-name.modern { font: 600 10px/1 system-ui, sans-serif; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(246,214,150,0.95); }
+.travel-name.super { font-size: 18px; letter-spacing: 0.3em; text-transform: uppercase; color: rgba(255,255,255,0.8); }
+.travel-name.land { font-size: 14px; color: rgba(255,255,255,0.9); }
+.travel-name.sea { font-size: 15px; font-style: italic; letter-spacing: 0.1em; color: rgba(190,225,255,0.92); }
+
+/* Globe / flat map switch */
+.view-switch { position: absolute; left: calc((100% - 432px) / 2); bottom: 18px; transform: translateX(-50%); z-index: 6;
+  display: flex; padding: 3px; gap: 2px; background: rgba(12,12,12,0.85); border: 1px solid var(--hairline); border-radius: 999px; }
+.view-switch button { font: 600 13px/1 system-ui, sans-serif; color: #ddd; background: none; border: 0; padding: 8px 16px; border-radius: 999px; cursor: pointer; }
+.view-switch button[aria-pressed="true"] { background: #5dff3a; color: #0b0b0b; }
+.time-travel .view-switch { display: none; }
+@media (max-width: 760px) { .view-switch { left: 50%; bottom: auto; top: calc(56vh - 52px); } }
+
+/* A fossil photo, when the main picture is a restoration (or there is none): small, lower down */
+.panel .fossil-pic { margin: 12px 0; display: grid; grid-template-columns: 120px 1fr; gap: 10px; align-items: center; }
+.panel .fossil-pic img { width: 120px; height: 90px; object-fit: cover; border-radius: 6px; }
+.panel .fossil-pic figcaption { font-size: 11px; color: var(--muted); }
+.panel .fossil-pic .tag { display: block; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); margin-bottom: 2px; }
+
+
+/* The legend sits at the foot of the card instead of floating on the map. */
+.panel .legend { position: static; max-width: none; margin: 0; padding: 8px 20px 10px; border: none;
+  border-top: 1px solid var(--hairline); border-radius: 0; box-shadow: none; background: none; font-size: 12px; flex-shrink: 0; }
+.species-open .example { display: none !important; }
+.species-open .legend .range-key { display: block; }
+.species-open .legend .key { display: none; }
+.panel .sil-pic img { object-fit: contain; height: 180px; padding: 18px 0; background: var(--hairline); filter: invert(0.92); }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .panel .sil-pic img { filter: none; } }
+
+/* "Lived here" list in the map tooltip: icon, name, and a bar for how strong the evidence is. */
+.lived { display: flex; align-items: center; gap: 6px; margin-top: 3px; }
+.lived span { flex: 1; }
+.lived i { display: block; height: 3px; background: currentColor; opacity: 0.55; border-radius: 1px; }
+.lived .icon, .lived .dot { flex: none; width: 22px; height: 13px; }
+.lived .dot { width: 8px; height: 8px; margin: 0 7px; }
+.lived span { white-space: nowrap; }
+
+/* A place's full list: each group opens to every kind found there. */
+.panel .groups li:has(details) { display: block; padding: 0; }
+.panel .groups details summary { display: grid; grid-template-columns: 30px 1fr auto; align-items: center; gap: 8px; padding: 5px 0; cursor: pointer; list-style: none; }
+.panel .groups details summary::-webkit-details-marker { display: none; }
+.panel .groups details[open] summary { font-weight: 600; }
+.kinds { list-style: none; margin: 0 0 8px 38px; padding: 0; }
+.kinds li { display: block !important; padding: 0 !important; }
+.kinds button { all: unset; display: block; width: 100%; padding: 3px 0; cursor: pointer; line-height: 1.3; }
+.kinds button i { margin-right: 6px; }
+.kinds button span { opacity: 0.6; font-size: 0.85em; }
+.kinds button:hover i, .kinds button:focus-visible i { text-decoration: underline; }
+
+/* A place's life: one blob per group, opening into a network of its kinds. */
+.life-net { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; z-index: 2; }
+.life-net .blob, .life-net .net-node { pointer-events: all; cursor: pointer; outline: none; }
+.life-net .blob .area { stroke-width: 1; stroke-opacity: 0.55; transition: stroke-opacity 0.15s, stroke-width 0.15s; }
+.life-net .blob:hover .area, .life-net .blob:focus-visible .area, .life-net .blob.open .area { stroke-opacity: 1; stroke-width: 2; }
+.life-net .blob .glyph { filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, 0.7)); pointer-events: none; }
+.life-net .blob.dim { display: none; }
+.life-net text { font: 600 11px system-ui, -apple-system, sans-serif; fill: #fbf6e6; paint-order: stroke; stroke: rgba(0, 0, 0, 0.75); stroke-width: 3px; stroke-linejoin: round; }
+.life-net .blob-n { text-anchor: middle; font-size: 10px; pointer-events: none; }
+.life-net .net-links line { stroke-width: 1; stroke-opacity: 0.7; }
+.life-net .net-node text { font-style: italic; font-weight: 500; font-size: 11.5px; }
+.life-net .net-node text.more { font-style: normal; opacity: 0.8; }
+.life-net .net-node circle { stroke: #fff; stroke-width: 1.2; }
+.life-net .net-node:hover text, .life-net .net-node:focus-visible text { text-decoration: underline; }
+@media (prefers-reduced-motion: reduce) { .life-net .blob .area { transition: none; } }
+/* The open group: a bold white ring with a dark halo, so even grey "other life" stands out from the map. */
+.life-net .blob.open .area { stroke: #fff; stroke-width: 3; stroke-opacity: 1; filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.9)) drop-shadow(0 0 8px rgba(0, 0, 0, 0.5)); }
+.life-net .blob.open .blob-n { font-size: 13px; }
+.life-net .net-links line { stroke-width: 1.1; stroke-opacity: 0.8; }
+.life-net .net-node text { font-size: 13px; }
+
+/* ---- The side card keeps only the logo and the time slider; an animal floats in its own card ---- */
+#panel-card { bottom: auto; }
+#panel-card #panel, #panel-card .legend, #panel-card .corner-back { display: none; }
+.world-back {
+  position: absolute; left: 16px; top: 16px; z-index: 6; padding: 8px 14px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--hairline); background: var(--panel-bg); color: var(--ink); font-size: 14px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+}
+.world-back[hidden] { display: none; }
+.world-back:hover, .world-back:focus-visible { border-color: var(--ink-2); }
+.species-pop {
+  left: 16px; right: auto; top: 64px; bottom: auto; width: 380px; max-width: calc(100% - 32px); max-height: calc(100% - 150px);
+  padding: 0; display: flex; flex-direction: column; overflow: hidden; z-index: 7;
+}
+.species-pop[hidden] { display: none; }
+.pop-bar { display: flex; align-items: center; gap: 6px; padding: 8px 8px 8px 10px; border-bottom: 1px solid var(--hairline); flex: none; }
+.species-pop .pop-title { flex: 1; margin: 0; font: italic 400 1.25rem/1.2 "EB Garamond", Palatino, Georgia, serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pop-btn {
+  flex: none; width: 34px; height: 34px; border-radius: 50%; cursor: pointer; font-size: 18px; line-height: 1;
+  border: 1px solid var(--hairline); background: color-mix(in srgb, var(--ink) 6%, transparent); color: var(--ink);
+}
+.pop-btn:hover, .pop-btn:focus-visible { border-color: var(--ink-2); }
+.pop-body { overflow-y: auto; padding: 16px 18px 14px; outline: none; }
+.species-pop .pop-key { list-style: none; margin: 0; padding: 8px 18px 10px; border-top: 1px solid var(--hairline); font-size: 12px; flex: none; display: flex; gap: 14px; flex-wrap: wrap; }
+.species-pop .pop-key li { display: flex; align-items: center; gap: 6px; }
+.species-pop .pop-key .sw { width: 18px; height: 11px; border-radius: 3px; background: var(--fam-vert); border: 1.5px solid #fff; }
+.species-pop .pop-key .sw.faint { opacity: 0.4; border-color: transparent; }
+.species-pop.min .pop-body, .species-pop.min .pop-key { display: none; }
+.species-pop.min { width: auto; min-width: 240px; }
+@media (max-width: 760px) { .species-pop { top: auto; bottom: 70px; left: 8px; max-height: 55%; } }
+.species-pop .pop-key .dot-find { width: 8px; height: 8px; border-radius: 50%; background: #fff; border: 1.5px solid #111; }
+/* A place's groups as touching patches inside one rounded outline. */
+.life-net .blob .area { fill-opacity: 0.58; stroke: #fbf6e6; stroke-opacity: 0.7; stroke-width: 1; }
+.life-net .blob:hover .area, .life-net .blob:focus-visible .area { fill-opacity: 0.75; stroke-opacity: 1; }
+.life-net .net-rim { fill: none; stroke: #fbf6e6; stroke-width: 1.8; pointer-events: none; filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.6)); }
+
+/* Each area of a living region carries its number; click it to open the area. */
+.area-num {
+  width: 24px; height: 24px; border-radius: 50%; padding: 0; cursor: pointer;
+  border: 1.5px solid #fbf6e6; background: rgba(12, 14, 20, 0.78); color: #fbf6e6;
+  font: 700 12px/1 system-ui, -apple-system, sans-serif; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+.area-num:hover, .area-num:focus-visible { background: #fbf6e6; color: #111; outline: none; }
+.life-net .blob .hit { fill: transparent; }
+
+/* The animal's card sits on the right, under the time slider. */
+.species-pop { left: auto; right: 12px; top: var(--pop-top, 200px); width: 408px; max-height: calc(100% - var(--pop-top, 200px) - 12px); }
+@media (max-width: 760px) { .species-pop { top: auto; bottom: 70px; left: 8px; right: 8px; width: auto; max-height: 55%; } }
+.species-pop .pop-key .sw.grad { border: none; background: linear-gradient(90deg, color-mix(in srgb, var(--range-color, var(--fam-vert)) 45%, white), color-mix(in srgb, var(--range-color, var(--fam-vert)) 55%, black)); }
+
+/* "What lived": the world's groups, under the time slider. */
+.groups-card { left: auto; right: 12px; bottom: auto; width: 408px; max-height: calc(100% - 260px); overflow-y: auto; padding: 12px 14px; }
+.groups-card[hidden] { display: none; }
+.groups-card h2 { margin: 0 0 6px; font: 400 1.2rem/1.2 "EB Garamond", Palatino, Georgia, serif; }
+.groups-card ul { list-style: none; margin: 0; padding: 0; }
+.groups-card button { all: unset; box-sizing: border-box; width: 100%; display: grid; grid-template-columns: 30px 1fr auto; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 6px; cursor: pointer; font-size: 14px; }
+.groups-card button:hover, .groups-card button:focus-visible { background: color-mix(in srgb, var(--ink) 8%, transparent); }
+.groups-card button[aria-pressed="true"] { background: color-mix(in srgb, var(--ink) 14%, transparent); font-weight: 600; }
+.groups-card .n { font-size: 12px; color: var(--muted); }
+@media (max-width: 760px) { .groups-card { display: none; } }
+
+/* The story of life beside the moving continents: periods as coloured bands, a marker, milestones. */
+.life-ribbon { position: absolute; left: 16px; top: 16px; bottom: 80px; z-index: 7; display: flex; gap: 10px; pointer-events: none; }
+.rb-bar { position: relative; width: 26px; border-radius: 13px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.5); }
+.rb-band { position: absolute; left: 0; right: 0; }
+.rb-band span { position: absolute; left: 32px; top: 2px; white-space: nowrap; font: 700 10px system-ui, sans-serif; letter-spacing: 0.06em; text-transform: uppercase; color: #fbf6e6; text-shadow: 0 1px 3px #000; }
+.rb-mark { position: absolute; left: -4px; right: -4px; height: 3px; background: #fff; box-shadow: 0 0 6px #fff; transition: top 0.1s linear; }
+.rb-events { list-style: none; margin: 0 0 0 96px; padding: 0; align-self: center; width: 250px; display: flex; flex-direction: column; gap: 6px; }
+.rb-events li { font: 14px/1.3 "EB Garamond", Georgia, serif; color: #fbf6e6; background: rgba(10,12,18,0.72); padding: 6px 10px; border-radius: 8px; animation: rb-in 0.5s ease-out; }
+.rb-events li:not(:first-child) { opacity: 0.55; font-size: 12px; }
+.rb-events b { display: block; font: 700 11px system-ui, sans-serif; color: #5dff3a; }
+@keyframes rb-in { from { opacity: 0; transform: translateY(-6px); } }
+@media (prefers-reduced-motion: reduce) { .rb-events li { animation: none; } .rb-mark { transition: none; } }
+@media (max-width: 760px) { .rb-events { display: none; } }
+
+/* Right-hand column under the slider: "What lived" as a strip, then the story of life. */
+.right-stack { position: absolute; right: 12px; bottom: 12px; width: 408px; z-index: 6; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
+.right-stack > * { pointer-events: auto; }
+.right-stack .groups-card { position: static; width: auto; max-height: 40vh; padding: 0; flex: none; }
+.groups-card .strip { all: unset; box-sizing: border-box; width: 100%; display: flex; align-items: baseline; gap: 8px; padding: 10px 14px; cursor: pointer; font: 400 1.15rem "EB Garamond", Georgia, serif; }
+.groups-card .strip span { font: 12px system-ui, sans-serif; color: var(--muted); flex: 1; }
+.groups-card ul { padding: 0 10px 10px; }
+.life-ladder { position: static; width: auto; flex: 1 1 auto; min-height: 120px; overflow-y: auto; padding: 10px 12px; }
+.life-ladder h2 { margin: 0 0 4px; font: 400 1.15rem "EB Garamond", Georgia, serif; }
+.spiral { position: relative; width: 380px; margin: 0 auto; }
+.spiral svg { position: absolute; inset: 0; overflow: visible; }
+.spiral path { fill: none; stroke-width: 26; stroke-linecap: butt; filter: drop-shadow(0 3px 2px rgba(0,0,0,0.45)); }
+.spiral path.shade { stroke: rgba(255,255,255,0.18); stroke-width: 3; filter: none; }
+.spiral text { font: 800 11px system-ui, sans-serif; letter-spacing: 0.05em; fill: #1b1712; text-anchor: middle; }
+.spiral text.ma { fill: #fbf6e6; font-weight: 600; font-size: 9px; }
+.spiral .note { position: absolute; width: 104px; display: flex; align-items: center; gap: 4px; font: 10.5px/1.1 "EB Garamond", Georgia, serif; color: #fbf6e6; }
+.spiral .note span { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.spiral .note.left { left: 0; }
+.spiral .note.right { right: 0; flex-direction: row-reverse; text-align: right; }
+.spiral .ms-icon { width: 22px; height: 16px; }
+.ms-icon { flex: none; display: inline-block; }
+@media (max-width: 760px) { .right-stack { display: none; } }
+.rb-events .ms-icon { width: 34px; height: 24px; float: left; margin-right: 8px; }
+@media (max-width: 760px) { .life-ladder { display: none; } }
+/* The story-of-life artwork: no card, transparent, revealed down to the period shown. */
+.right-stack .life-ladder { background: none; border: none; box-shadow: none; padding: 0; overflow: hidden; flex: 0 1 auto; min-height: 0; }
+.right-stack .life-ladder { overflow-y: auto; flex: 1 1 auto; }
+.spiral { width: 400px; }
+.spiral path { stroke-width: 30; }
+.spiral .side path { filter: none; }
+.spiral .top path { filter: none; }
+.spiral text { font: 800 13px "Arial Narrow", system-ui, sans-serif; letter-spacing: 0.02em; }
+.spiral text.ma { fill: #fbf6e6; font-size: 10px; }
+.spiral .note { width: 112px; font-size: 11.5px; text-shadow: 0 1px 3px #000; }
+.spiral .ms-icon { width: 30px; height: 22px; }
+.ms-photo { flex: none; width: 40px; height: 40px; object-fit: cover; border-radius: 50%; border: 2px solid #fbf6e6; box-shadow: 0 1px 4px rgba(0,0,0,0.6); }
+.rb-events .ms-photo { float: left; width: 46px; height: 46px; margin-right: 10px; }
+.spiral .note { min-height: 40px; }
+.life-ribbon.kept { bottom: auto; pointer-events: auto; }
+.life-ribbon.kept .rb-events { margin: 0; }
+.life-ribbon.kept .rb-events li { opacity: 1; font-size: 14px; }
+.rb-close { align-self: flex-start; width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--hairline); background: rgba(10,12,18,0.8); color: #fbf6e6; cursor: pointer; }
+.spiral .note[data-ms] { cursor: pointer; border-radius: 8px; } .spiral .note[data-ms]:hover span, .spiral .note[data-ms]:focus-visible span { text-decoration: underline; }
+/* An open network stands clear of the map: the map dims behind it, lines and dots get dark casings. */
+.life-net.has-open { background: rgba(4, 8, 18, 0.55); transition: background 0.3s; }
+.life-net .net-links line { stroke-width: 1.8; stroke-opacity: 1; filter: drop-shadow(0 0 1.5px rgba(0,0,0,0.9)); }
+.life-net .net-node circle { stroke: #fff; stroke-width: 2; filter: drop-shadow(0 0 2px rgba(0,0,0,0.9)); }
+@media (prefers-reduced-motion: reduce) { .life-net.has-open { transition: none; } }
+
+/* ---- Event mode: the story panel on the right; the explorer's tools step aside ---- */
+body[data-mode="events"] #groups-card, body[data-mode="events"] .life-ladder, body[data-mode="events"] .view-switch,
+body[data-mode="events"] #world-back, body[data-mode="events"] .life-net { display: none !important; }
+.story-panel { position: static; width: auto; padding: 16px 18px; overflow-y: auto; flex: 0 1 auto; }
+.story-panel h2 { margin: 2px 0 4px; font: 400 1.6rem/1.15 "EB Garamond", Palatino, Georgia, serif; }
+.story-panel h3 { margin: 12px 0 2px; font: 700 11px system-ui, sans-serif; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.story-panel p { margin: 0 0 6px; font: 1.05rem/1.45 "EB Garamond", Palatino, Georgia, serif; }
+.story-panel .kicker { font: 600 12px system-ui, sans-serif; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+.story-panel .when { font: 13px system-ui, sans-serif; color: var(--ink-2); }
+.story-panel .certainty { display: inline-block; margin-top: 8px; padding: 3px 10px; border-radius: 999px; font: 600 12px system-ui, sans-serif; background: color-mix(in srgb, var(--ink) 10%, transparent); }
+.story-nav { display: flex; gap: 8px; margin-top: 14px; }
+.story-nav button { flex: 1; padding: 9px 10px; border-radius: 10px; border: 1px solid var(--hairline); background: none; color: var(--ink); cursor: pointer; font: 600 14px system-ui, sans-serif; }
+.story-nav button.next { background: #5dff3a; color: #000; border: none; }
+.story-nav button:disabled { opacity: 0.35; cursor: default; }
+.story-panel .stories { list-style: none; margin: 12px 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.story-panel .stories button { all: unset; box-sizing: border-box; width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--hairline); cursor: pointer; display: block; }
+.story-panel .stories button:hover, .story-panel .stories button:focus-visible { border-color: #5dff3a; }
+.story-panel .stories b { display: block; font: 400 1.2rem "EB Garamond", Georgia, serif; }
+.story-panel .stories span { font: 13px system-ui, sans-serif; color: var(--muted); }
+@media (max-width: 760px) { body[data-mode="events"] .right-stack { display: flex; left: 8px; right: 8px; width: auto; top: auto !important; max-height: 50%; } }
+
+/* ---- Documentary mode: only the globe, the narration and the pictures ---- */
+body.movie .panel, body.movie .right-stack, body.movie .maplibregl-ctrl, body.movie .view-switch, body.movie #world-back,
+body.movie .place-name, body.movie .flat-back, body.movie .tooltip, body.movie .life-ribbon, body.movie .maplibregl-marker { display: none !important; }
+.movie-ui { position: absolute; inset: 0; z-index: 20; pointer-events: none; }
+.movie-age { position: absolute; top: 22px; left: 0; right: 0; text-align: center; font: 600 15px system-ui, sans-serif; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(251,246,230,0.85); text-shadow: 0 1px 6px #000; }
+.movie-sub { position: absolute; left: 50%; bottom: 7%; transform: translateX(-50%); width: min(880px, 90%); margin: 0; text-align: center;
+  font: 400 clamp(1.15rem, 2.3vw, 1.7rem)/1.4 "EB Garamond", Palatino, Georgia, serif; color: #fbf6e6; text-shadow: 0 2px 10px #000, 0 0 3px #000; }
+.movie-title { display: block; font-size: clamp(2.2rem, 5vw, 3.6rem); letter-spacing: 0.02em; }
+.movie-pic { position: absolute; right: 4%; top: 50%; transform: translateY(-55%) scale(0.97); width: min(380px, 34vw); margin: 0; opacity: 0; transition: opacity 0.6s, transform 0.6s; }
+.movie-pic.on { opacity: 1; transform: translateY(-55%) scale(1); }
+.movie-pic img { display: block; width: 100%; max-height: 52vh; object-fit: contain; border-radius: 12px; background: #f4f1ea; box-shadow: 0 12px 40px rgba(0,0,0,0.6); }
+.movie-pic figcaption { margin-top: 6px; font: 11px system-ui, sans-serif; color: rgba(251,246,230,0.7); text-shadow: 0 1px 3px #000; }
+.movie-pic figcaption b { color: #fbf6e6; font: italic 600 14px "EB Garamond", Georgia, serif; }
+.movie-exit { position: absolute; top: 14px; right: 14px; width: 36px; height: 36px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.3); background: rgba(0,0,0,0.5); color: #fff; font-size: 20px; cursor: pointer; pointer-events: auto; opacity: 0; transition: opacity 0.3s; }
+.movie-ui.awake .movie-exit, .movie-exit:focus-visible { opacity: 1; }
+.movie-end { position: absolute; left: 50%; bottom: 22%; transform: translateX(-50%); display: flex; gap: 10px; pointer-events: auto; }
+.movie-end button, .movie-end a { padding: 10px 18px; border-radius: 999px; border: none; background: #5dff3a; color: #000; font: 600 15px system-ui, sans-serif; cursor: pointer; text-decoration: none; }
+.movie-end [data-other], .movie-end a { background: rgba(255,255,255,0.15); color: #fff; }
+@media (max-width: 760px) { .movie-pic { right: 50%; top: 18%; transform: translate(50%, 0); width: 60vw; } .movie-pic.on { transform: translate(50%, 0); } }
+@media (prefers-reduced-motion: reduce) { .movie-pic { transition: none; } }
+/* Documentary: text fades between lines; pictures pop in and slip away. */
+.movie-sub, .movie-age { transition: opacity 0.7s ease; }
+.movie-sub.out, .movie-age.out { opacity: 0; }
+.movie-pic, .movie-pic.on { transform: translateY(-55%); transition: opacity 0.35s ease; }
+.movie-pic.on img { animation: pic-pop 0.5s cubic-bezier(0.2, 1.45, 0.4, 1); }
+@keyframes pic-pop { from { transform: scale(0.6); opacity: 0; } 60% { opacity: 1; } to { transform: scale(1); } }
+@media (max-width: 760px) { .movie-pic, .movie-pic.on { transform: translate(50%, 0); } }
+@media (prefers-reduced-motion: reduce) { .movie-sub, .movie-age { transition: none; } .movie-pic.on img { animation: none; } }
+/* Documentary: the period and a colour key with each group's number of kinds on record. */
+.movie-top { position: absolute; top: 18px; left: 0; right: 0; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.movie-top .movie-age { position: static; }
+.movie-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; max-width: 92%; }
+.movie-chips span { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: rgba(8, 10, 16, 0.6);
+  font: 13px system-ui, sans-serif; color: rgba(251,246,230,0.85); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 60%, transparent); }
+.movie-chips span.main { color: #fbf6e6; box-shadow: inset 0 0 0 2px var(--c); }
+.movie-chips i { width: 11px; height: 11px; border-radius: 50%; background: var(--c); }
+.movie-chips b { font-variant-numeric: tabular-nums; color: #fff; }
+/* Film picker: each film card has a clear play button. */
+.story-panel .stories button { position: relative; padding-left: 58px; }
+.story-panel .stories .play { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); width: 32px; height: 32px; border-radius: 50%;
+  display: grid; place-items: center; background: #5dff3a; color: #000; font: 14px/1 system-ui, sans-serif; font-style: normal; }
+.story-panel .stories .play-label { display: block; margin-top: 6px; font: 600 12px system-ui, sans-serif; font-style: normal; color: #5dff3a; }
+.story-panel .stories button.current { border-color: #5dff3a; }
+/* Documentary: the flat map of the whole world, on the left of the globe. */
+.movie-flat { position: absolute; left: 3%; top: 50%; transform: translateY(-50%); width: min(340px, 27vw); margin: 0; }
+.movie-flat canvas { display: block; width: 100%; height: auto; border-radius: 8px; background: #0d2a4f; box-shadow: 0 10px 30px rgba(0,0,0,0.55); }
+.movie-flat figcaption { margin-top: 5px; font: 600 11px system-ui, sans-serif; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(251,246,230,0.6); }
+@media (max-width: 760px) { .movie-flat { display: none; } }
+/* On the map page: the way back to the films. */
+.films-link { display: block; margin-top: 10px; padding: 9px 12px; border-radius: 10px; text-align: center; text-decoration: none;
+  font: 700 15px system-ui, sans-serif; color: #5dff3a; border: 2px solid #5dff3a; }
+.films-link:hover, .films-link:focus-visible { background: #5dff3a; color: #000; }
+
+/* "This place": the field guide to a clicked spot, on the right like the species card. */
+body.place-open .right-stack, body.species-open .place-pop { display: none !important; }
+.place-pop .pop-title { font-style: normal; }
+.place-pop .kicker { margin: 0 0 4px; }
+.place-pop h3 { margin: 14px 0 6px; font: 700 12px system-ui, sans-serif; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.place-pop h4 { display: flex; align-items: center; gap: 6px; margin: 8px 0 4px; font: 600 14px system-ui, sans-serif; }
+.place-pop .land { font-size: 14px; line-height: 1.5; }
+.place-pop ul { list-style: none; margin: 0; padding: 0; }
+.place-pop li button { all: unset; box-sizing: border-box; width: 100%; display: grid; grid-template-columns: 44px 1fr; gap: 10px; align-items: center; padding: 5px 4px; border-radius: 8px; cursor: pointer; }
+.place-pop li button:hover, .place-pop li button:focus-visible { background: color-mix(in srgb, var(--ink) 8%, transparent); }
+.place-pop li img { width: 44px; height: 44px; object-fit: cover; border-radius: 6px; background: #f4f1ea; }
+.place-pop li .icon, .place-pop li .dot { justify-self: center; }
+.place-pop li i { display: block; font: italic 1.05rem/1.2 "EB Garamond", Georgia, serif; }
+.place-pop li small { font-size: 12px; color: var(--muted); }
+.place-spot { width: 18px; height: 18px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 0 2px rgba(0,0,0,0.6), 0 0 10px rgba(0,0,0,0.5); }
+
+/* "This place" as a ring round the clicked spot: three arcs of life, the landscape in the middle. */
+.place-ring { position: absolute; left: 0; top: 0; width: 0; height: 0; z-index: 4; pointer-events: none; }
+.place-ring[hidden] { display: none; }
+.species-open .place-ring { display: none; }
+.ring-arcs { position: absolute; overflow: visible; }
+.ring-arcs path { fill: none; stroke-width: 3; stroke-opacity: 0.55; stroke-linecap: round; filter: drop-shadow(0 0 3px rgba(0,0,0,0.8)); }
+.ring-centre { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); width: 150px; padding: 12px 10px 10px; border-radius: 50%;
+  aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; text-align: center;
+  background: rgba(8, 10, 16, 0.82); border: 2px solid rgba(251,246,230,0.85); box-shadow: 0 6px 24px rgba(0,0,0,0.6); color: #fbf6e6; pointer-events: auto; }
+.ring-centre b { font: 400 1.05rem/1.15 "EB Garamond", Georgia, serif; }
+.ring-centre span { font: 12px system-ui, sans-serif; color: rgba(251,246,230,0.8); }
+.ring-centre em { margin-top: 3px; font: 600 10px system-ui, sans-serif; letter-spacing: 0.06em; text-transform: uppercase; font-style: normal; color: rgba(251,246,230,0.55); }
+.ring-close { position: absolute; top: 4px; right: 14px; width: 24px; height: 24px; border-radius: 50%; border: none; background: rgba(255,255,255,0.12); color: #fff; cursor: pointer; font-size: 15px; line-height: 1; }
+.ring-item { all: unset; position: absolute; width: 46px; height: 46px; transform: translate(-50%, -50%); border-radius: 50%; cursor: pointer; pointer-events: auto;
+  display: grid; place-items: center; background: #f4f1ea; box-shadow: 0 0 0 2px var(--c), 0 4px 12px rgba(0,0,0,0.6); opacity: var(--o); transition: transform 0.15s, opacity 0.15s; }
+.ring-item img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+.ring-item .icon { width: 30px; height: 26px; }
+.ring-item:hover, .ring-item:focus-visible { opacity: 1; transform: translate(-50%, -50%) scale(1.25); z-index: 2; }
+.ring-name { position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%); width: max-content; max-width: 200px; padding: 4px 8px; border-radius: 6px;
+  background: rgba(8,10,16,0.92); color: #fbf6e6; text-align: center; opacity: 0; pointer-events: none; transition: opacity 0.15s; }
+.ring-item:hover .ring-name, .ring-item:focus-visible .ring-name { opacity: 1; }
+.ring-name i { display: block; font: italic 1rem "EB Garamond", Georgia, serif; }
+.ring-name small { font: 11px system-ui, sans-serif; color: rgba(251,246,230,0.7); }
+.ring-more { position: absolute; transform: translate(-50%, -50%); width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center;
+  background: rgba(8,10,16,0.85); box-shadow: 0 0 0 2px var(--c); color: #fbf6e6; font: 700 13px system-ui, sans-serif; }
+.ring-label { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; font: 700 11px system-ui, sans-serif; letter-spacing: 0.08em;
+  text-transform: uppercase; text-shadow: 0 1px 4px #000, 0 0 2px #000; }
+.ring-empty { position: absolute; left: 0; top: 95px; transform: translateX(-50%); white-space: nowrap; font: 12px system-ui, sans-serif; color: #fbf6e6; text-shadow: 0 1px 3px #000; }
+@media (prefers-reduced-motion: reduce) { .ring-item, .ring-name { transition: none; } }
+/* Ring of group icons, and the card of a group's species. */
+.ring-arcs circle { fill: none; stroke: rgba(251,246,230,0.35); stroke-width: 1.5; stroke-dasharray: 3 5; }
+.ring-group { width: 54px; height: 54px; background: rgba(8,10,16,0.85); box-shadow: 0 0 0 2px var(--c), 0 4px 12px rgba(0,0,0,0.6); opacity: 1; }
+.ring-group .icon, .ring-group .dot { width: 32px; height: 28px; }
+.ring-group.on { box-shadow: 0 0 0 4px var(--c), 0 4px 16px rgba(0,0,0,0.7); transform: translate(-50%, -50%) scale(1.12); }
+.ring-count { position: absolute; top: -6px; right: -6px; min-width: 20px; height: 20px; padding: 0 5px; box-sizing: border-box; border-radius: 10px;
+  background: var(--c); color: #000; font: 700 11px/20px system-ui, sans-serif; text-align: center; }
+.ring-tag { position: absolute; top: calc(100% + 4px); left: 50%; transform: translateX(-50%); white-space: nowrap; font: 600 11px system-ui, sans-serif;
+  color: #fbf6e6; text-shadow: 0 1px 3px #000, 0 0 2px #000; pointer-events: none; }
+.ring-card { position: absolute; width: 300px; max-height: 340px; overflow-y: auto; padding: 10px; border-radius: 12px; pointer-events: auto;
+  background: rgba(14,16,22,0.95); border: 2px solid var(--c); box-shadow: 0 10px 30px rgba(0,0,0,0.6); color: #fbf6e6; }
+.ring-card[hidden] { display: none; }
+.ring-card header { display: grid; grid-template-columns: 30px 1fr 26px; align-items: center; column-gap: 8px; margin-bottom: 8px; }
+.ring-card header b { font: 600 14px system-ui, sans-serif; }
+.ring-card header span:not(.icon):not(.dot) { grid-column: 2; font: 12px system-ui, sans-serif; color: rgba(251,246,230,0.65); }
+.ring-card-close { grid-column: 3; grid-row: 1; width: 26px; height: 26px; border-radius: 50%; border: none; background: rgba(255,255,255,0.12); color: #fff; cursor: pointer; }
+.ring-card ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.ring-card li button { all: unset; box-sizing: border-box; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 4px;
+  border-radius: 8px; cursor: pointer; opacity: var(--o); }
+.ring-card li button:hover, .ring-card li button:focus-visible { opacity: 1; background: rgba(255,255,255,0.08); }
+.ring-card li img, .ring-card li .thumb { width: 64px; height: 64px; border-radius: 8px; object-fit: cover; background: #f4f1ea; display: grid; place-items: center; }
+.ring-card li .thumb .icon { width: 40px; height: 34px; }
+.ring-card li i { font: italic 0.95rem/1.15 "EB Garamond", Georgia, serif; text-align: center; word-break: break-word; }
+.ring-card li i { word-break: normal; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.88rem; }
+.ring-card li .rel { font: 10px system-ui, sans-serif; color: rgba(251,246,230,0.55); max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Bigger pictures in a group's card. */
+.ring-card { width: 460px; max-height: 480px; }
+.ring-card ul { gap: 10px; }
+.ring-card li img, .ring-card li .thumb { width: 128px; height: 128px; border-radius: 10px; }
+.ring-card li .thumb .icon { width: 72px; height: 62px; }
+.ring-card li i { font-size: 1rem; }
+@media (max-width: 760px) { .ring-card { width: 300px; } .ring-card li img, .ring-card li .thumb { width: 84px; height: 84px; } }
+.ring-card li img { object-fit: contain; background: #f4f1ea; }
+/* A group's card: three big pictures, then every other kind as a clickable name. */
+.ring-more-names { margin: 10px 2px 4px; font: 700 11px system-ui, sans-serif; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(251,246,230,0.55); }
+.ring-names { display: flex; flex-wrap: wrap; gap: 4px 6px; }
+.ring-name-link { all: unset; cursor: pointer; padding: 2px 8px; border-radius: 999px; background: rgba(255,255,255,0.07);
+  font: italic 0.95rem/1.4 "EB Garamond", Georgia, serif; color: #fbf6e6; }
+.ring-name-link:hover, .ring-name-link:focus-visible { background: color-mix(in srgb, var(--c) 35%, transparent); }
+/* Guessed by the niche model, not found: dashed and dimmer, so finds and guesses never look alike. */
+.ring-names-likely .ring-name-link { background: transparent; outline: 1px dashed rgba(251,246,230,0.3); outline-offset: -1px; color: rgba(251,246,230,0.78); }
+
+/* Zones: the key, and the tag above a clicked zone (with its group icons and the species card). */
+.zone-key { position: absolute; left: 12px; bottom: 96px; z-index: 5; display: flex; flex-direction: column; gap: 3px; padding: 8px 10px; border-radius: 10px;
+  background: rgba(8,10,16,0.72); color: #fbf6e6; font: 12px system-ui, sans-serif; }
+.zone-key b { font: 700 10px system-ui, sans-serif; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(251,246,230,0.6); margin-bottom: 2px; }
+.zone-key span { display: flex; align-items: center; gap: 6px; }
+.zone-key i { width: 14px; height: 10px; border-radius: 2px; opacity: 0.85; }
+body.movie .zone-key { display: none; }
+.place-ring .zone-tag { position: absolute; left: 0; bottom: 16px; transform: translateX(calc(-50% + var(--shift, 0px))); width: max-content; max-width: 480px;
+  display: flex; flex-direction: column; padding: 10px 12px; border-radius: 12px; pointer-events: auto; color: #fbf6e6;
+  background: rgba(10,12,18,0.92); border: 2px solid var(--zc); box-shadow: 0 8px 26px rgba(0,0,0,0.6); }
+.place-ring.below .zone-tag { bottom: auto; top: 16px; }
+.place-ring .zone-tag::after { content: ""; position: absolute; left: calc(50% - var(--shift, 0px)); top: 100%; width: 2px; height: 16px; background: var(--zc); }
+.place-ring.below .zone-tag::after { top: auto; bottom: 100%; }
+.zone-tag header { display: flex; align-items: center; gap: 8px; }
+.zone-tag header b { font: 400 1.15rem "EB Garamond", Georgia, serif; }
+.zone-tag header > span { font: 600 11px system-ui, sans-serif; letter-spacing: 0.05em; text-transform: uppercase; color: rgba(251,246,230,0.55); flex: 1; }
+.zone-tag .ring-close { position: static; }
+.zone-dot { width: 12px; height: 12px; border-radius: 3px; background: var(--zc); }
+.zone-facts { margin: 2px 0 8px; font: 12px system-ui, sans-serif; color: rgba(251,246,230,0.75); }
+.zone-groups { display: flex; flex-wrap: wrap; gap: 6px; }
+.zone-group { all: unset; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 3px; width: 58px; padding: 6px 2px; border-radius: 10px;
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--c) 70%, transparent); }
+.zone-group .icon, .zone-group .dot { width: 30px; height: 26px; }
+.zone-group span { font: 600 10px system-ui, sans-serif; text-align: center; }
+.zone-group:hover, .zone-group:focus-visible, .zone-group.on { background: color-mix(in srgb, var(--c) 25%, transparent); box-shadow: inset 0 0 0 2px var(--c); }
+.zone-tag .ring-card { position: static; width: auto; max-height: 340px; margin-bottom: 10px; border: none; box-shadow: none; padding: 0 0 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.12); border-radius: 0; background: none; }
+.place-ring.below .zone-tag .ring-card { order: 3; margin: 10px 0 0; padding: 10px 0 0; border-bottom: none; border-top: 1px solid rgba(255,255,255,0.12); }
+@media (max-width: 760px) { .place-ring .zone-tag { max-width: 92vw; } .zone-key { bottom: 140px; } }
+.place-ring .zone-tag { max-height: var(--room, 80vh); }
+.zone-tag .ring-card { flex: 1 1 auto; min-height: 0; max-height: none; overflow-y: auto; }
+body.place-open .zone-key { display: none; }
+/* The species spread's key matches its thermal colours. */
+.species-pop .pop-key .sw.grad { background: linear-gradient(90deg, rgba(127,176,105,0.25), #7fb069 60%); border: none; }
+
+
+.species-pop .pop-key .sw.grad { background: repeating-linear-gradient(45deg, #7a0010 0 1px, transparent 1px 4px), repeating-linear-gradient(-45deg, #7a0010 0 1px, transparent 1px 4px), #5f7d41; border: 1px solid #7a0010; }
+.place-ring::before { content: ""; position: absolute; left: -5px; top: -5px; width: 10px; height: 10px; border-radius: 50%; background: #fbf6e6; box-shadow: 0 0 0 2px rgba(10,12,18,0.9); }
+#place-card.ring-card { position: absolute; top: 210px; right: 16px; bottom: 70px; left: auto; width: 400px; max-height: none; height: auto; overflow-y: auto; z-index: 5;
+  padding: 12px 14px; border-radius: 12px; color: #fbf6e6; background: rgba(10,12,18,0.94); border: 2px solid var(--zc); box-shadow: 0 8px 26px rgba(0,0,0,0.6); margin: 0; align-self: auto; }
+#place-card.ring-card[hidden] { display: none; }
+@media (max-width: 760px) { #place-card.ring-card { top: auto; left: 8px; right: 8px; width: auto; height: 50vh; bottom: 8px; } }
+.place-link { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 4; overflow: visible; }
+.place-link line { stroke: var(--zc, #fbf6e6); stroke-width: 2; stroke-dasharray: 5 4; }
+.place-link circle { fill: var(--zc, #fbf6e6); }
+body.species-open .place-link, body.species-open #place-card { display: none !important; }
+#place-card ul { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+#place-card li img, #place-card li .thumb { width: 100%; height: auto; aspect-ratio: 1; }
+.place-link line { stroke: #5dff3a; stroke-width: 2.5; stroke-dasharray: none; filter: drop-shadow(0 0 4px #5dff3a); }
+.place-link circle { fill: #5dff3a; }
+.place-link { z-index: 3; }
+@media (min-width: 761px) {
+  body.place-open .panel-head .timeline, body.place-open .panel-head .period, body.place-open .next-period { display: none !important; }
+  body.place-open .place-ring .zone-tag { display: none; }
+}
+#place-side { position: absolute; top: 120px; right: 16px; bottom: 70px; width: 400px; z-index: 5; display: flex; flex-direction: column;
+  border-radius: 12px; background: rgba(10,12,18,0.96); border: 2px solid #5dff3a; box-shadow: 0 8px 26px rgba(0,0,0,0.6); overflow: hidden; }
+#place-side .zone-tag { position: static; transform: none; max-width: none; max-height: none; width: auto; border: none; box-shadow: none; background: none; display: block; padding: 12px 14px; }
+#place-side .zone-tag::after { display: none; }
+#place-side #place-card.ring-card { position: static; flex: 1 1 auto; min-height: 0; width: auto; border: none; border-top: 1px solid rgba(255,255,255,0.12); border-radius: 0; box-shadow: none; background: none; }
+body.species-open #place-side { display: none !important; }
+#place-side { bottom: auto; max-height: calc(100% - 190px); }
+.groups-card ul { display: grid; grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); gap: 6px; }
+.groups-card li button.zone-group { width: 100%; display: flex; grid-template-columns: none; padding: 6px 2px; font-size: 10px; color: #fbf6e6; }
+.groups-card li button.zone-group[aria-pressed="true"] { background: color-mix(in srgb, var(--c) 30%, transparent); box-shadow: inset 0 0 0 2px var(--c); }
+.groups-card li button.zone-group .n { font-size: 10px; color: rgba(251,246,230,0.6); }
+.right-stack .life-ladder { background: #000 !important; border: 2px solid #5dff3a !important; border-radius: 12px; padding: 0 !important; flex: 0 1 auto; }
+.life-ladder.open { flex: 1 1 auto; }
+.spiral[hidden] { display: none; }
+.ladder-strip { all: unset; box-sizing: border-box; width: 100%; display: flex; justify-content: space-between; padding: 10px 14px; cursor: pointer; font: 400 1.15rem "EB Garamond", Georgia, serif; color: #fbf6e6; }
+.groups-card li button.zone-group { flex-direction: column; align-items: center; justify-content: center; gap: 3px; text-align: center; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--c) 70%, transparent); border-radius: 10px; }
+.groups-card li button.zone-group span { font: 600 10px system-ui, sans-serif; }
+.groups-card li button.zone-group .icon, .groups-card li button.zone-group .dot { width: 30px; height: 26px; }
+.groups-card ul { display: flex; flex-wrap: wrap; gap: 6px; }
+.groups-card li button.zone-group { width: 58px; padding: 6px 2px; gap: 3px; }
+.groups-card li button.zone-group .n { display: none; }
+.groups-card li button.zone-group span { font: 600 10px system-ui, sans-serif; color: #fbf6e6; }
+.hover-facts { position: absolute; left: 0; top: 0; z-index: 6; pointer-events: none; padding: 4px 8px; border-radius: 6px; background: rgba(10,12,18,0.9); color: #fbf6e6; font: 12px system-ui, sans-serif; white-space: nowrap; }
+.hover-facts[hidden] { display: none; }
+.place-link { z-index: 5 !important; }
+.place-ring { z-index: 6 !important; }
+.hover-facts { z-index: 8 !important; }
+#place-side { z-index: 7 !important; }
+/* The land transition: just the flat world, large and clean (no globe, no lines). */
+.time-travel .maplibregl-canvas, .time-travel #place-ring, .time-travel #place-side, .time-travel .place-link, .time-travel .zone-key { visibility: hidden !important; }
+@media (min-width: 761px) { .time-inset { left: 150px; right: 440px; top: 50%; bottom: auto; transform: translateY(-50%); width: auto; } }
+.time-inset figcaption { display: none; }
+.time-travel .maplibregl-canvas-container { visibility: hidden !important; }
+.travel-name.to { font: 700 16px/1 system-ui, sans-serif !important; text-transform: uppercase; letter-spacing: 0.08em; color: #5dff3a !important; text-shadow: 0 0 6px rgba(0,0,0,0.9), 0 0 2px #000; }

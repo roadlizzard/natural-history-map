@@ -1,0 +1,14 @@
+.venv
+cache
+scripts
+worker
+node_modules
+wrangler.jsonc
+package.json
+package-lock.json
+project-brief.md
+.wrangler
+.assetsignore
+.gitignore
+data/agent
+data/habitat-*.bin

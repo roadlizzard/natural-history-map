@@ -1,0 +1,16 @@
+{
+  // The site (static files in this folder) plus the build-time agent: a cron that works through
+  // a job queue in D1 with Workers AI, a little each day, within the free daily allowance.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "anthropocene",
+  "main": "worker/index.js",
+  "compatibility_date": "2026-10-01",
+  "assets": { "directory": ".", "binding": "ASSETS", "run_worker_first": ["/data/agent/*", "/data/slices.json", "/data/labels-*"] },
+  "ai": { "binding": "AI" },
+  "d1_databases": [
+    { "binding": "DB", "database_name": "natural-history-map", "database_id": "f853a060-33a7-412a-afbd-0ef4a4de18e1", "migrations_dir": "worker/migrations", "remote": true }
+  ],
+  "triggers": { "crons": ["*/15 * * * *"] },
+  "vars": { "MODEL": "@cf/google/gemma-4-26b-a4b-it", "JOBS_PER_RUN": "12" },
+  "observability": { "enabled": true }
+}

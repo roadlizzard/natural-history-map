@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Anthropocene</title>
+  <meta name="description" content="Explore life on Earth through 510 million years: what lived where, on the moving continents.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Anthropocene">
+  <meta property="og:title" content="Anthropocene">
+  <meta property="og:description" content="Explore life on Earth through 510 million years: what lived where, on the moving continents.">
+  <meta property="og:url" content="https://anthropocene.bladedestroyer.workers.dev/">
+  <meta property="og:image" content="https://anthropocene.bladedestroyer.workers.dev/data/share.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Anthropocene logo">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://anthropocene.bladedestroyer.workers.dev/data/share.jpg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css">
+  <link rel="stylesheet" href="styles.css?v=2026-11-12r">
+</head>
+<body>
+  <main class="stage">
+    <div id="map" role="region" aria-label="Map of fossil finds. Use the card on the right to move between places and animals."></div>
+    <button class="flat-back" id="flat-back" hidden></button>
+    <div class="view-switch" role="group" aria-label="Map view">
+      <button type="button" data-view="globe" aria-pressed="true">Globe</button>
+      <button type="button" data-view="flat" aria-pressed="false">Flat map</button>
+    </div>
+    <canvas class="flatmap" id="flatmap" hidden role="img" aria-label="Flat map of the ancient world showing where the chosen animal probably lived"></canvas>
+    <svg class="card-lines" id="card-lines" aria-hidden="true"></svg>
+    <div class="card-layer" id="card-layer"></div>
+
+    <!-- What lived: each group, click to see where it lived across the Earth -->
+    <nav class="panel groups-card" id="groups-card" aria-label="What lived"></nav>
+
+    <!-- Back to the whole world, while a place is open -->
+    <button class="world-back" id="world-back" type="button" hidden>← The whole world</button>
+
+    <!-- One animal: a card floating over the map, which can be folded down to its title bar -->
+    <section class="panel species-pop" id="species-pop" hidden aria-labelledby="pop-title">
+      <header class="pop-bar">
+        <button type="button" class="pop-btn" id="pop-back" aria-label="Back to the place">←</button>
+        <h2 class="pop-title" id="pop-title"></h2>
+        <button type="button" class="pop-btn" id="pop-min" aria-expanded="true" aria-controls="pop-body" aria-label="Minimise">–</button>
+        <button type="button" class="pop-btn" id="pop-close" aria-label="Close">×</button>
+      </header>
+      <div class="pop-body" id="pop-body" tabindex="-1"></div>
+      <ul class="range-key pop-key">
+        <li><span class="sw range grad"></span>Cross-hatched: where it could live</li>
+        <li><span class="dot-find"></span>Fossil finds</li>
+      </ul>
+    </section>
+
+    <!-- The card: the logo, then whatever you're looking at -->
+    <aside class="panel" id="panel-card">
+      <div class="panel-head">
+        <h1 class="logo"><img src="data/logo.png" alt="Anthropocene" width="900" height="187"></h1>
+        <div class="timeline" id="timeline" hidden></div>
+      </div>
+      <button class="corner-back" id="corner-back" hidden aria-label="Back">←</button>
+      <div id="panel" aria-live="polite" tabindex="-1"></div>
+      <!-- The legend: at the foot of the card -->
+      <div class="legend" aria-label="Legend">
+        <ul class="key" id="key"></ul>
+        <ul class="range-key">
+          <li><span class="sw range"></span>Where it probably lived</li>
+          <li><span class="sw range faint"></span>Close relatives</li>
+          <li><span class="ln"></span>Joins its range · <span class="ln dash"></span>to relatives</li>
+          <li><span class="dot-find"></span>Fossil finds</li>
+        </ul>
+        <p class="names-key"><span class="nk-modern">GOLD CAPITALS</span> today's places, where they were then · <i>Italic</i> terrain</p>
+        <button class="legend-btn" id="map-colours" aria-expanded="false" aria-controls="terrain-key">Map colours</button>
+        <ul class="terrain-key" id="terrain-key" hidden></ul>
+      </div>
+    </aside>
+    <div class="tooltip" id="tooltip" role="presentation"></div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/h3-js@4.1.0/dist/h3-js.umd.js"></script>
+  <script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
+  <script src="map.js?v=2026-11-12r"></script>
+  <script src="card.js?v=2026-11-12r"></script>
+  <script src="place.js?v=2026-11-12r"></script>
+</body>
+</html>

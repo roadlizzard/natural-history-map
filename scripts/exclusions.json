@@ -1,0 +1,8 @@
+{
+ "_about": "Genera left out of the map although PBDB still lists them, each with the published reason. Reviewed by a person: the refresh loop never adds to this list by itself, it only reports suspects.",
+ "Tikitherium": {
+  "reason": "Not a Triassic mammal: the single tooth is a Neogene shrew premolar from reworked sediment.",
+  "source": "Averianov & Voyta 2024, Journal of Mammalian Evolution, doi:10.1007/s10914-024-09703-w",
+  "added": "2026-11-10"
+ }
+}
