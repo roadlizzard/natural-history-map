@@ -828,6 +828,33 @@ function maxentSuitability(presence, habitatCells, landLife) {
   return (i) => Math.min(1, Math.exp(score(i, false) - ref));
 }
 
+const eco0 = (name) => lifeInfo[name]?.eco || {};
+
+// Where its food could be. Plant-eaters need land where plants were found growing in this period's climate;
+// meat-eaters (and omnivores, insect-eaters) need land where plant-eaters could live. Sea life that feeds on
+// light (algae, photosymbiotic corals) or grazes needs shallow, sunlit water; filter-feeders the shelf seas.
+// Each food check is a temperature band of the food's own finds this period, ±6 °C. Unknown diets pass.
+let foodBands = {};
+function foodBand(kind) {
+  if (foodBands.slice !== slice) foodBands = { slice };
+  if (kind in foodBands) return foodBands[kind];
+  const { low } = climateGrid(), { cols } = dem();
+  const is = kind === "plants"
+    ? (gi) => slice.groups[slice.genera[gi].group] === "plants" || /photoautotroph/.test(eco0(slice.genera[gi].name).diet || "")
+    : (gi) => LAND_GROUPS.has(slice.groups[slice.genera[gi].group]) && /herbivore|grazer|browser|frugivore/.test(eco0(slice.genera[gi].name).diet || "");
+  const ts = slice.siteList.filter((s) => s.occ.some(([gi]) => is(gi))).map((s) => { const [c, r] = cellOf(s.lng, s.lat); return low[r * cols + c]; });
+  return (foodBands[kind] = ts.length >= 3 ? [d3.min(ts) - 6, d3.max(ts) + 6] : null);
+}
+function foodCheck(diet, g) {
+  const { elev } = dem(), { low } = climateGrid();
+  const inBand = (b) => (i) => !b || (low[i] >= b[0] && low[i] <= b[1]);
+  const landNeed = /herbivore|grazer|browser|frugivore/.test(diet) ? foodBand("plants")
+    : /carnivore|omnivore|insectivore/.test(diet) ? foodBand("prey") || foodBand("plants") : null;
+  const seaShallow = /photoautotroph|photosymbiotic|grazer/.test(diet) ? -200 : /suspension/.test(diet) ? -1000 : null;
+  const landOK = inBand(landNeed);
+  return (i) => elev[i] > 0 ? landOK(i) : seaShallow === null || elev[i] >= seaShallow;
+}
+
 function nicheMask(g) {
   const { elev, cols, rows } = dem();
   const h = habitat(g), genus = slice.genera[g];
@@ -846,24 +873,31 @@ function nicheMask(g) {
   const kept = clusters.filter((c) => c.n >= top * 0.15);
   const core = kept.flatMap((c) => c.sites);
 
-  // Climate band: the core finds' latitudes (with relatives' when it has few finds), plus a margin.
+  // Climate band: its own finds plus its family's (or order's) finds anywhere in this period, since
+  // close relatives show the climates the line could take. Finds cluster where rock survived, so the
+  // band is never narrower than ±6 °C round them.
   let sample = core;
   for (const rank of [3, 2]) {
-    if (sample.length >= 5 || !genus.taxonomy[rank]) continue;
+    if (!genus.taxonomy[rank]) continue;
     const kin = new Set(slice.genera.map((x, i) => x.taxonomy[rank] === genus.taxonomy[rank] ? i : -1).filter((i) => i >= 0));
-    const near = slice.siteList.filter((st) => st.occ.some(([gi]) => kin.has(gi)) && core.some((c) => d3.geoDistance([c.lng, c.lat], [st.lng, st.lat]) * 6371 < 2500));
-    if (near.length > sample.length) sample = near;
+    const kinSites = slice.siteList.filter((st) => st.occ.some(([gi]) => kin.has(gi)));
+    if (kinSites.length > sample.length) sample = core.concat(kinSites);
+    if (sample.length >= 5) break;
   }
-  // Its climate: the estimated temperatures where it was found, with a margin either side.
   const { t: temp, low } = climateGrid();
   // Fossils form in basins and lowlands, so a find's climate is its lowland temperature, not the
   // average height of its 1° cell.
   const tFinds = cellsOf(sample).map((i) => low[i]);
-  // The fewer places it was found, the wider the margin: a few finds only hint at the climate it could take.
   const nFound = new Set(cellsOf(sample)).size, widen = 1 + 3 / Math.sqrt(Math.max(1, nFound));
-  const tLo = d3.min(tFinds) - 3 * widen, tHi = d3.max(tFinds) + 3 * widen;
+  const margin = Math.max(6, 3 * widen);
+  const tLo = d3.min(tFinds) - margin, tHi = d3.max(tFinds) + margin;
+  // Latitude only stands in for climate when there is no modelled temperature.
   const latFinds = cellsOf(sample).map((i) => Math.abs(90 - Math.floor(i / cols)));
-  const latLo = d3.min(latFinds) - 8 * widen, latHi = d3.max(latFinds) + 8 * widen;
+  const latLo = climateGrid().modelled ? 0 : d3.min(latFinds) - 15, latHi = climateGrid().modelled ? 90 : d3.max(latFinds) + 15;
+
+  // Food: it can only live where what it eats could live (PBDB's diet).
+  const diet = eco0(genus.name).diet || "";
+  const foodOK = foodCheck(diet, g);
 
   const eco = lifeInfo[genus.name]?.eco || {};
   const pelagic = /nekton|pelagic|plankton/.test(eco.life_habit || "");
@@ -897,30 +931,20 @@ function nicheMask(g) {
       const p = patchOf[rr * cols + ((c + dc + cols) % cols)]; if (p >= 0) ownPatches.add(p);
     }
   }
-  const rad = Math.PI / 180, unit = (lng, lat) => [Math.cos(lat * rad) * Math.cos(lng * rad), Math.cos(lat * rad) * Math.sin(lng * rad), Math.sin(lat * rad)];
-  const findVecs = core.map((st) => unit(st.lng, st.lat)), reach = Math.cos(REACH_KM / 6371);
-  const near = (i) => { const v = unit((i % cols) - 180, 90 - Math.floor(i / cols)); return findVecs.some((f) => f[0] * v[0] + f[1] * v[1] + f[2] * v[2] >= reach); };
-  const fits = (i) => fitsHabitat(i) && ownPatches.has(patchOf[i]) && near(i);
+  // The whole of its own landmass or sea, however far from the finds: only open ocean (for land life) or
+  // land (for sea life) stops it.
+  const fits = (i) => fitsHabitat(i) && ownPatches.has(patchOf[i]) && foodOK(i);
 
-  // How likely it lived in each cell of the ancient Earth with its habitat: full where the climate matches
-  // its finds and fading as the climate moves away from theirs, and densest near the finds themselves,
-  // thinning (but never vanishing) with distance: a gradient of how concentrated its populations were.
+  // How well each cell suits it: full inside its climate band, fading over a few degrees outside it.
   const tMid = (tLo + tHi) / 2, tHalf = (tHi - tLo) / 2;
   const density = new Float32Array(cols * rows), mask = new Uint8Array(cols * rows);
-  // Suitability from the MaxEnt model when it has enough distinct find spots; else the simple climate match.
-  const presence = [...new Set(cellsOf(sample))];
-  let suit = null;
-  if (presence.length >= 8) {                         // too few find spots for a model: the climate band
-    const habitatCells = [];
-    for (let i = 0; i < cols * rows; i++) if (fits(i)) habitatCells.push(i);
-    if (habitatCells.length > 20) suit = maxentSuitability(presence, habitatCells, !inSea);
-  }
   for (let i = 0; i < cols * rows; i++) {
     if (!fits(i)) continue;
-    const off = Math.max(0, Math.abs(temp[i] - tMid) - tHalf);         // °C outside its finds' climate
+    const ti = elev[i] > 0 ? low[i] : temp[i];         // land read at lowland level, as the finds are
+    const off = Math.max(0, Math.abs(ti - tMid) - tHalf);               // °C outside its climate band
     const alat = Math.abs(90 - Math.floor(i / cols)), offLat = Math.max(0, latLo - alat, alat - latHi);
-    const climateFit = suit ? suit(i) : Math.exp(-0.5 * (off / 2.5) ** 2) * Math.exp(-0.5 * (offLat / 6) ** 2);
-    if (climateFit < 0.1) continue;
+    const climateFit = Math.exp(-0.5 * (off / 3) ** 2) * Math.exp(-0.5 * (offLat / 8) ** 2);
+    if (climateFit < RANGE_LEVELS[0]) continue;
     // how common it was: how well the environment suits it, anywhere on the Earth of its time (not how near
     // a dig site is: fossils only show where rock happened to survive)
     density[i] = climateFit;
