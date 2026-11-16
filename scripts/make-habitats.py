@@ -43,6 +43,7 @@ DATA = os.path.join(os.path.dirname(HERE), "data")
 ROWS, COLS = 90, 180
 MIN_SCORE = 0.12          # the range maps' faintest band
 MIN_MAXENT = 8            # distinct find cells needed to fit a model
+GAP_REACH_KM = 7000      # how far a group's kinds may fill a landmass with no record of that group
 REACH_KM = 4000           # furthest a guessed place may be from one of its finds
 SHELF_M = -2500           # sea floor shallower than this is shelf and slope (bottom dwellers)
 DRIFTERS = {"graptolites", "conodonts", "fish"}            # swam or drifted in open water
@@ -140,8 +141,23 @@ def build(time):
 
     flat = lambda a: a.ravel()
     F_sea = np.stack([flat(temp), flat(np.minimum(elev, 0)) / 1000, flat(np.minimum(coast, 40)) / 10, flat(alat) / 30], 1)
-    F_land = np.stack([flat(temp), flat(alat) / 30], 1)
-    F_land_found = np.stack([flat(low), flat(alat) / 30], 1)          # a find's climate, at lowland level
+    # land cells read at lowland level too, like the finds: a 1° cell's average height says little about
+    # where its life lived (valleys and basins), and comparing a find's lowland climate with an upland
+    # cell's cooled one would leave uplands almost empty
+    F_land = np.stack([flat(low), flat(alat) / 30], 1)
+
+    # Landmasses where any land life was found this period (insects, plants, tetrapods...). Plants grew on all
+    # of them: an island with only an insect bed still had forests for those insects, even where no plant
+    # fossil from it made it into the database. Plants may spread to those landmasses, climate permitting.
+    lived_land = set()
+    group_land = collections.defaultdict(set)                       # group -> landmasses with its finds
+    for g, cc in finds.items():
+        if groups[genera[g]["group"]] in WATER:
+            continue
+        for r, c in cc:
+            if land[r, c] and comp["land"][r, c] >= 0:
+                lived_land.add(int(comp["land"][r, c]))
+                group_land[groups[genera[g]["group"]]].add(int(comp["land"][r, c]))
 
     best = [[] for _ in range(ROWS * COLS)]                          # per cell: [(score 0-1 or 2 = found, genus)]
     n_model = n_env = 0
@@ -163,13 +179,28 @@ def build(time):
         own = {int(lab[rr, (c + dc) % COLS]) for r, c in cells for dr in (-1, 0, 1) for dc in (-1, 0, 1)
                if 0 <= (rr := r + dr) < ROWS and lab[rr, (c + dc) % COLS] >= 0}
         allowed = ok[kind] & np.isin(lab, list(own)) if own else np.zeros_like(land)
+        # A landmass with land finds but none of this group (a fossil gap: North China's Carboniferous has
+        # insect beds and floras but no tetrapods on record) is filled from the group's nearest finds, up to
+        # GAP_REACH_KM away. A landmass with its own record of the group keeps it: a kangaroo stays in Australia.
+        spread = None
+        if kind == "land":
+            extra = lived_land - own if grp == "plants" else lived_land - own - group_land[grp]
+            spread = ok["land"] & np.isin(lab, list(extra))
+            if grp != "plants":
+                p = np.radians([[89.0 - 2 * r, -179.0 + 2 * c] for r, c in cells])
+                far = np.zeros((ROWS, COLS), bool)
+                for p_lat, p_lon in p:
+                    d = np.arccos(np.clip(np.sin(rlat) * np.sin(p_lat) + np.cos(rlat) * np.cos(p_lat) * np.cos(lon - p_lon), -1, 1)) * EARTH_KM
+                    far |= d <= GAP_REACH_KM
+                spread &= far
+            allowed |= spread
         # ...and within REACH_KM of a find.
         near = np.zeros((ROWS, COLS), bool)
         for r, c in cells:
             p_lat, p_lon = np.radians(89.0 - 2 * r), np.radians(-179.0 + 2 * c)
             d = np.arccos(np.clip(np.sin(rlat) * np.sin(p_lat) + np.cos(rlat) * np.cos(p_lat) * np.cos(lon - p_lon), -1, 1)) * EARTH_KM
             near |= d <= REACH_KM
-        allowed &= near
+        allowed &= near if spread is None else (near | spread)
 
         idx = rs * COLS + cs
         pres = np.unique(idx[ok[kind].ravel()[idx]])
@@ -180,8 +211,6 @@ def build(time):
             area = np.nonzero(allowed.ravel())[0]
             bg = tg if len(tg) >= 40 else np.union1d(tg, area[:: max(1, len(area) // 2000)])
             F = F_sea if sea else F_land
-            if not sea:                                                   # finds read at lowland level
-                F = F.copy(); F[pres] = F_land_found[pres]
             score = maxent(F, pres, bg, len(pres))
             if not sea:
                 score = np.maximum(score, 0)
@@ -194,7 +223,7 @@ def build(time):
             fl = alat[rs, cs]
             def z(x, lo, hi, s):
                 return np.maximum(0, np.maximum(lo - x, x - hi)) / s
-            env = np.exp(-0.5 * (z(temp, ft.min() - 2 * widen, ft.max() + 2 * widen, 2.5) ** 2
+            env = np.exp(-0.5 * (z(low if not sea else temp, ft.min() - 2 * widen, ft.max() + 2 * widen, 2.5) ** 2
                                  + z(alat, fl.min() - 6 * widen, fl.max() + 6 * widen, 6) ** 2))
             if sea:
                 fe = np.minimum(elev[rs, cs], 0)
