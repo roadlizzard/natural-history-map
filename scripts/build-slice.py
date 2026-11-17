@@ -26,6 +26,7 @@ reconstruct_points = load("reconstruct-points")
 fetch_coastlines = load("fetch-coastlines")
 fetch_paleodem = load("fetch-paleodem")
 fetch_paleotemp = load("fetch-paleotemp")
+fetch_paleorain = load("fetch-paleorain")
 
 from groups import GROUPS, group_of
 
@@ -148,6 +149,8 @@ def build(time_ma, intervals, label):
         "dem": fetch_paleodem.encoded(time_ma),
         # Ancient yearly surface temperature (Scotese et al. 2021) on the same grid as the DEM.
         "temp": fetch_paleotemp.encoded(time_ma),
+        # Ancient rainfall (yearly, and the driest three months) from the same climate runs.
+        "rain": fetch_paleorain.encoded(time_ma),
     }, unplaced, unmapped, len(recs), len(loose)
 
 

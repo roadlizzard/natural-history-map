@@ -8,6 +8,8 @@ Environment per 2° cell:
   temperature  yearly surface temperature, Scotese et al. (2021) HadCM3L-based grids, on the same PALEOMAP
                plate model as the coastlines (a land find is read at lowland level: dig sites are basins)
   latitude     its distance from the equator (day length and seasons)
+  rainfall     yearly, and in the driest three months (land only), from the same HadCM3L runs
+               (fetch-paleorain.py): a desert and a rainforest at the same temperature are not the same place
   sea life also: depth, and distance from the coast
 Fitting: MaxEnt with linear and squared features (so it can learn a preferred middle), regularised more
 the fewer places it was found. The background is a sample of its group's own dig sites in the same
@@ -98,6 +100,14 @@ def build(time):
     temp = t1.reshape(ROWS, 2, COLS, 2).mean(axis=(1, 3))
     low = (t1 + 6.5 * np.maximum(e1, 0) / 1000).reshape(ROWS, 2, COLS, 2).mean(axis=(1, 3))   # at lowland level
     land = elev > 0
+    # Rainfall from the same climate runs (fetch-paleorain.py), on a log scale: 100 mm to 200 mm is as big a
+    # step for life as 1,000 to 2,000. "dry" is the driest three months, the length and depth of the dry season.
+    if "rain" in sl:
+        r1 = {k: np.frombuffer(base64.b64decode(sl["rain"][k]), dtype="<u2").reshape(180, 360).astype(np.float32)
+              for k in ("year", "dry")}
+        wet = {k: np.log10(v.reshape(ROWS, 2, COLS, 2).mean(axis=(1, 3)) + 50) for k, v in r1.items()}
+    else:
+        wet = None
 
     # Distance to the coast (cells), by breadth-first search from every cell beside the shore.
     coast = np.full((ROWS, COLS), -1, int)
@@ -144,7 +154,7 @@ def build(time):
     # land cells read at lowland level too, like the finds: a 1° cell's average height says little about
     # where its life lived (valleys and basins), and comparing a find's lowland climate with an upland
     # cell's cooled one would leave uplands almost empty
-    F_land = np.stack([flat(low), flat(alat) / 30], 1)
+    F_land = np.stack([flat(low), flat(alat) / 30] + ([flat(wet["year"]) * 3, flat(wet["dry"]) * 3] if wet else []), 1)
 
     # Landmasses where any land life was found this period (insects, plants, tetrapods...). Plants grew on all
     # of them: an island with only an insect bed still had forests for those insects, even where no plant
@@ -225,6 +235,12 @@ def build(time):
                 return np.maximum(0, np.maximum(lo - x, x - hi)) / s
             env = np.exp(-0.5 * (z(low if not sea else temp, ft.min() - 2 * widen, ft.max() + 2 * widen, 2.5) ** 2
                                  + z(alat, fl.min() - 6 * widen, fl.max() + 6 * widen, 6) ** 2))
+            if not sea and wet:
+                # ...and its finds' rainfall, yearly and in the dry season, with margins of about a third
+                # of the way between a desert and a rainforest (0.15 on the log scale, widened like the rest)
+                for k in ("year", "dry"):
+                    fw = wet[k][rs, cs]
+                    env *= np.exp(-0.5 * z(wet[k], fw.min() - 0.15 * widen, fw.max() + 0.15 * widen, 0.12) ** 2)
             if sea:
                 fe = np.minimum(elev[rs, cs], 0)
                 env *= np.exp(-0.5 * z(np.minimum(elev, 0), fe.min() - 300 * widen, fe.max() + 300 * widen, 400) ** 2)
